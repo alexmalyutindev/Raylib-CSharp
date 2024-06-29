@@ -155,8 +155,65 @@ jobs:
           path: native/raylib/libraylib.dylib
           if-no-files-found: error
           
+# Build for OSX
+  build-osx-arm64-angle:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        name: [arm64]
+    
+    # Run
+    steps:
+      - uses: actions/checkout@v4
+        
+      # Setup .NET
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      
+      # Build Angle
+      - name: Build Angle
+        run: |
+          git clone https://chromium.googlesource.com/chromium/tools/depot_tools.git --depth=1
+          export PATH=$PATH:$PWD/depot_tools
+          git clone https://github.com/google/angle.git --depth=1
+          cd angle
+          python3 scripts/bootstrap.py
+          gclient sync --shallow --no-history -D -R
+          gn gen out/Release --args='target_cpu="${{ matrix.name }}" is_debug=false mac_sdk_min="10.10" angle_enable_metal=true angle_enable_glsl=true angle_enable_swiftshader=false angle_enable_vulkan=false'
+          autoninja -j 10 -C out/Release libEGL libGLESv2
+
+      # Build Raylib
+      - name: Build Raylib
+        run: |
+          curl -Lso raylib.zip https://github.com/raysan5/raylib/archive/${{ env.raylib_version }}.zip
+          unzip -qq raylib.zip
+          cmake -S raylib-${{ env.raylib_version }} \
+          -B native \
+          -D CMAKE_BUILD_TYPE=Release \
+          -D CMAKE_OSX_ARCHITECTURES=${{ matrix.name }} \
+          -D BUILD_SHARED_LIBS=ON \
+          -D BUILD_EXAMPLES=OFF \
+          -D CUSTOMIZE_BUILD=ON \
+          -D SUPPORT_GIF_RECORDING=OFF \
+          -D SUPPORT_SCREEN_CAPTURE=OFF \
+          -I angle/include \
+          -L angle/out/Release/libEGL.dylib \
+          -L angle/out/Release/libGLESv2.dylib
+          cmake --build native --config Release
+
+      # Upload Raylib
+      - name: Upload Raylib
+        uses: actions/upload-artifact@v4
+        with:
+          name: osx-${{ matrix.name }}-angle
+          path: native/raylib/libraylib.dylib
+          if-no-files-found: error
+          
   # Publish to NuGet
   publish-nuget:
+    if: github.repository == 'MrScautHD/Raylib-CSharp'
     runs-on: ubuntu-latest
     needs: [build-win, build-linux, build-osx]
     
