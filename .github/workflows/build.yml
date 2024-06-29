@@ -165,7 +165,7 @@ jobs:
     # Run
     steps:
       - uses: actions/checkout@v4
-        
+
       # Setup .NET
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -183,6 +183,9 @@ jobs:
           gclient sync --shallow --no-history -D -R
           gn gen out/Release --args='target_cpu="${{ matrix.name }}" is_debug=false mac_sdk_min="10.10" angle_enable_metal=true angle_enable_glsl=true angle_enable_swiftshader=false angle_enable_vulkan=false'
           autoninja -j 10 -C out/Release libEGL libGLESv2
+          cd ..
+          mkdir -p native/angle
+          cp angle/out/Release/*.dylib ./native/angle
 
       # Build Raylib
       - name: Build Raylib
@@ -198,9 +201,7 @@ jobs:
           -D CUSTOMIZE_BUILD=ON \
           -D SUPPORT_GIF_RECORDING=OFF \
           -D SUPPORT_SCREEN_CAPTURE=OFF \
-          -I angle/include \
-          -L angle/out/Release/libEGL.dylib \
-          -L angle/out/Release/libGLESv2.dylib
+          -D OPENGL_VERSION="ES 2.0"
           cmake --build native --config Release
 
       # Upload Raylib
@@ -208,7 +209,10 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: osx-${{ matrix.name }}-angle
-          path: native/raylib/libraylib.dylib
+          path: |
+            native/raylib/libraylib.dylib
+            native/angle/libEGL.dylib
+            native/angle/libGLESv2.dylib
           if-no-files-found: error
           
   # Publish to NuGet
